@@ -1,0 +1,154 @@
+##############################################################
+
+###################### EVALUACIÓN DE SUPUESTOS################
+
+##############################################################
+
+
+ExpImp<-read.table("ExpImp.txt", header=T)
+attach(ExpImp)
+lm.exp<-lm(Invext ~ mes + Import + Export + Ipc, data=ExpImp)
+library(MASS)
+
+
+#### Homoscedasticidad
+
+#revisión gráfica
+plot(mes,lm.exp$residuals^2)
+plot(Import,lm.exp$residuals^2)
+plot(Export,lm.exp$residuals^2)
+plot(Ipc,lm.exp$residuals^2)
+
+Factor=rep(1,24)
+Factor[mes>6]<-2
+Factor[mes>12]<-3
+Factor[mes>18]<-4
+Factor
+bartlett.test(lm.exp$residuals ~ Factor)
+
+
+###### Normalidad
+
+hist(residuals(lm.exp))
+s<-summary(lm.exp)$sigma
+#Kolmogorov
+dnorm(residuals(lm.exp),mean=0,sd=s)
+ks.test(residuals(lm.exp), "pnorm",0,s)#s=419.54864
+#Shapiro y Wilk
+shapiro.test(residuals(lm.exp))
+
+#Transformación de BoxCox
+Bcox=boxcox(lm.exp,plotit=T)
+Bcox=boxcox(lm.exp,plotit=T,lambda=seq(0.5,1.5,by=0.1))
+cbind(Bcox$x,Bcox$y)
+
+
+###### Multicolinealidad
+
+lm(Invext ~ mes , data=ExpImp)
+lm(Invext ~ Import , data=ExpImp)
+lm(Invext ~ mes + Import + Export + Ipc, data=ExpImp)
+
+pairs(ExpImp,gap=0.5)
+cor(ExpImp)
+# Indice de condición
+x<-model.matrix(lm.exp)
+sqrt ( max(eigen(t(x)%*%x)$values) / eigen(t(x)%*%x)$values )
+
+# VIF
+lm.exp.1<-lm(mes ~ Import + Export + Ipc, data=ExpImp)
+lm.exp.2<-lm(Import ~ mes + Export + Ipc, data=ExpImp)
+lm.exp.3<-lm(Export ~ mes + Import + Ipc, data=ExpImp)
+lm.exp.4<-lm(Ipc ~ mes + Import + Export , data=ExpImp)
+VIF1=1 /( 1 - summary(lm.exp.1)$r.squared);VIF1
+VIF2=1 /( 1 - summary(lm.exp.2)$r.squared);VIF2
+VIF3=1 /( 1 - summary(lm.exp.3)$r.squared);VIF3
+VIF4=1 /( 1 - summary(lm.exp.4)$r.squared);VIF4
+
+library(car)
+vif(lm.exp)
+
+
+# Regresión Ridge
+library(MASS)
+lm.exp.Ridge<-lm.ridge(Invext ~ mes + Import + Export + Ipc, data=ExpImp, lambda= seq(0,200,0.1))
+matplot(lm.exp.Ridge$lambda,t(lm.exp.Ridge$coef),type="l",xlab=expression(lambda),ylab=expression(hat(beta)))
+abline(h=0,lwd=2)
+
+lm.exp.Ridge$coef[, lm.exp.Ridge$lam==100]
+summary(lm.exp)$coefficients
+
+lm.exp.Ridge$coef[, lm.exp.Ridge$lam==0.1]
+lm.exp.Ridge$scales
+summary(lm.exp)$coefficients
+
+AIC(lm(Invext ~ mes , data=ExpImp))
+AIC(lm(Invext ~ mes + Import, data=ExpImp))
+AIC(lm(Invext ~ mes + Import + Export , data=ExpImp))
+AIC(lm(Invext ~ mes + Import + Export + Ipc, data=ExpImp))
+
+
+####### INDEPENDENCIA DE ERRORES
+lm.exp<-lm(Invext ~ mes + Import + Export + Ipc, data=ExpImp)
+e<-lm.exp$residuals
+
+boxplot(residuals(lm.exp))
+stem(residuals(lm.exp))
+plot(residuals(lm.exp),xlab="mes",ylab="residuos")
+title("a) residuos vs mes")
+
+library(car)
+dwtest(lm.exp)
+
+Import
+Import2=c(NA,Import[1:23])
+Import3=c(NA,NA,Import[1:22])
+Invext2=c(NA,Invext[1:23])
+Invext3=c(NA,NA,Invext[1:22])
+cbind(Invext,Invext2,Invext3)
+
+par(mfrow=c(3,1))
+lm.exp<-lm(Invext ~ mes + Import , data=ExpImp)
+plot(mes,lm.exp$residuals);lines(mes,lm.exp$residuals)
+lm.exp<-lm(Invext ~ mes + Invext2 , data=ExpImp)
+plot(mes[2:24],lm.exp$residuals);lines(mes[2:24],lm.exp$residuals)
+lm.exp<-lm(Invext ~ mes + Invext2 + Import2 + Invext3 + Import3 , data=ExpImp)
+plot(mes[3:24],lm.exp$residuals);lines(mes[3:24],lm.exp$residuals)
+
+
+#errores
+lm.exp<-lm(Invext ~ mes + Import + Export + Ipc, data=ExpImp)
+e<-lm.exp$residuals
+
+hist(e)
+boxplot(e)
+stem(residuals(lm.exp))
+
+par(mfrow=c(2,2))
+plot(residuals(lm.exp),xlab="mes",ylab="residuos")
+title("a) residuos vs mes")
+
+plot(fitted(lm.exp),residuals(lm.exp),xlab="ajustados",ylab="residuos")
+title("b) residuos vs ajustados")
+
+plot(fitted(lm.exp),ExpImp$Invext,xlab="ajustados",ylab="observados")
+abline(0,1)
+title("c) ajustados vs observados")
+
+qqnorm(residuals(lm.exp),xlab="cuantiles de la normal",ylab="residuos")
+qqline(residuals(lm.exp))
+#title("d) QQ-plot")
+
+
+#Influencia
+
+influence.measures(lm.exp)
+InfExp=influence.measures(lm.exp);InfExp
+dfbetas(lm.exp)
+dffits(lm.exp)
+covratio(lm.exp)
+cooks.distance(lm.exp)
+hatvalues(lm.exp)
+
+data.frame ( cbind(mes,Rstu=rstudent(lm.exp),Rstand=rstandard(lm.exp),Dffit=dffits(lm.exp),CovR=covratio(lm.exp),DCook=cooks.distance(lm.exp) ) )
+
